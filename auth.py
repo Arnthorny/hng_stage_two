@@ -49,7 +49,7 @@ class Auth:
     """
 
     def __init__(self):
-        self._db = DB()
+        self._db = {}
 
     def register_user(self, **kwargs):
         """

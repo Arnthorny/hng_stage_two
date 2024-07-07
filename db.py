@@ -38,8 +38,7 @@ class DB:
         # self._engine = create_engine(
         #     "postgresql+psycopg://{}:{}@{}:{}/{}".format(*URL_PARAMS_TEST)
         # )
-        self._engine =
-        create_engine("postgresql+psycopg://{}:{}@{}:{}/{}".format(*URL_PARAMS))
+        self._engine = create_engine("postgresql+psycopg://{}:{}@{}:{}/{}".format(*URL_PARAMS))
 
         # Base.metadata.drop_all(self._engine)
         # Base.metadata.create_all(self._engine)
