@@ -18,8 +18,7 @@ from os import getenv
 # URL_PARAMS = (getenv('HNG_2_USER'), getenv('HNG_2_PASSWORD'),
 #               getenv('HNG_2_HOST'), getenv('HNG_2_PORT'), getenv('HNG_2_DB'))
 
-# URL_SECRET = getenv('HNG_URL_SECRET')
-URL_SECRET = "postgresql+psycopg://tony:ynoT123$@localhost/test_db"
+URL_SECRET = getenv('HNG_URL_SECRET')
 
 
 def _generate_uuid() -> str:
