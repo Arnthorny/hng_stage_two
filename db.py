@@ -15,8 +15,10 @@ from typing import TypeVar, Dict, Any, Union
 from os import getenv
 
 
-URL_PARAMS = (getenv('HNG_2_USER'), getenv('HNG_2_PASSWORD'),
-              getenv('HNG_2_HOST'), getenv('HNG_2_PORT'), getenv('HNG_2_DB'))
+# URL_PARAMS = (getenv('HNG_2_USER'), getenv('HNG_2_PASSWORD'),
+#               getenv('HNG_2_HOST'), getenv('HNG_2_PORT'), getenv('HNG_2_DB'))
+
+URL_SECRET = getenv('HNG_URL_SECRET')
 
 
 def _generate_uuid() -> str:
@@ -35,13 +37,11 @@ class DB:
     def __init__(self) -> None:
         """Initialize a new DB instance
         """
-        # self._engine = create_engine(
-        #     "postgresql+psycopg://{}:{}@{}:{}/{}".format(*URL_PARAMS_TEST)
-        # )
-        self._engine = create_engine("postgresql+psycopg://{}:{}@{}:{}/{}".format(*URL_PARAMS))
+        # self._engine = create_engine("postgresql+psycopg://{}:{}@{}:{}/{}".format(*URL_PARAMS))
+        self._engine = create_engine(URL_SECRET)
 
-        # Base.metadata.drop_all(self._engine)
-        # Base.metadata.create_all(self._engine)
+        Base.metadata.drop_all(self._engine)
+        Base.metadata.create_all(self._engine)
         self.__session = None
 
     @property
