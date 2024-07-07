@@ -18,7 +18,8 @@ from os import getenv
 # URL_PARAMS = (getenv('HNG_2_USER'), getenv('HNG_2_PASSWORD'),
 #               getenv('HNG_2_HOST'), getenv('HNG_2_PORT'), getenv('HNG_2_DB'))
 
-URL_SECRET = getenv('HNG_URL_SECRET')
+# URL_SECRET = getenv('HNG_URL_SECRET')
+URL_SECRET = "postgresql+psycopg://tony:ynoT123$@localhost/test_db"
 
 
 def _generate_uuid() -> str:
@@ -53,7 +54,8 @@ class DB:
             self.__session = DBSession()
         return self.__session
 
-    def add_user(self, email, password, firstName, lastName, phone=None) -> User:
+    def add_user(self, email, password, firstName, lastName,
+                 phone=None, userId=None):
         """
         The method, which has two required string arguments: email and
         hashed_password, and returns a User object. The method should save the
@@ -63,7 +65,7 @@ class DB:
             email(`str`): The user's email.
             hashed_password(`str`): The user's password
         """
-        u_id = _generate_uuid()
+        u_id = userId or _generate_uuid()
 
         new_user = User(userId=u_id, email=email, password=password,
                         firstName=firstName, lastName=lastName, phone=phone)

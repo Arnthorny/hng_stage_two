@@ -34,8 +34,8 @@ def _hash_password(password: str) -> bytes:
 def validate_fields(field_dict):
     err_list = []
 
-    for key in field_dict.keys():
-        if type(field_dict[key]) != str:
+    for key in ATTRIBS_USER[1:]:
+        if key != 'phone' and type(field_dict.get(key)) != str:
             err_obj = {
                 "field": key,
                 "message": "string"
@@ -224,12 +224,12 @@ class Auth:
             try:
                 d_token = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
                 current_user = self.get_user(d_token['userId'])
-            except jwt.ExpiredSignatureError:
+            except (jwt.ExpiredSignatureError, jwt.exceptions.DecodeError):
                 current_user = None
 
             if not current_user:
                 return jsonify({
-                    'message' : 'Token is invalid !!'
+                    'message' : 'Token is invalid'
                 }), 401
                 # returns the current logged in users context to the routes
             return f(current_user, *args, **kwargs)
