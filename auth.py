@@ -5,12 +5,12 @@ Auth Module
 import bcrypt
 from db import DB
 from uuid import uuid4
-from typing import Union, TypeVar
 from models.user import User
 from flask import abort, request, jsonify
-from sqlalchemy.exc import NoResultFound, InvalidRequestError
-from sqlalchemy import text
 
+from sqlalchemy.exc import NoResultFound, InvalidRequestError, IntegrityError
+
+from os import getenv
 from functools import wraps
 import jwt
 from datetime import datetime, timedelta, timezone
@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone
 ATTRIBS_USER = ['userId', 'email', 'lastName', 'firstName', 'password', 'phone']
 ATTRIBS_ORG = ['orgId', 'name', 'description']
 
+SECRET_KEY = getenv('FLASK_SECRET_KEY')
 
 
 def _hash_password(password: str) -> bytes:
@@ -74,10 +75,8 @@ class Auth:
                 raise ValueError('Invalid parameters')
 
         try:
-            user = self._db.find_user_by(email=kwargs.get('email'))
-        except NoResultFound:
             h_pwd = _hash_password(kwargs.get('password'))
-            kwargs['password'] = h_pwd
+            kwargs['password'] = h_pwd.decode("utf-8")
             user = self._db.add_user(**kwargs)
 
             org_name = "{}'s Organisation".format(kwargs.get('firstName'))
@@ -87,7 +86,8 @@ class Auth:
             self._db.commit()
 
             return user
-        else:
+        except IntegrityError:
+            self._db.rollback()
             raise ValueError('User {} already exists'.format(kwargs.get("email")))
 
 
@@ -100,18 +100,12 @@ class Auth:
             org_name(`str`): The name of Organisation.
             desc(`str`): Description of org
         """
-
-        fields = {'name': name, 'description': description}
-        field_validation_errors = validate_fields(fields)
-        if field_validation_errors:
-            raise TypeError(field_validation_errors)
-
         if name is None:
             raise ValueError('Invalid parameters')
 
         new_org = self._db.add_org(name, description)
         if user_obj:
-            user.user_organisations.append(org)
+            user_obj.user_organisations.append(new_org)
             self._db.commit()
         return new_org
 
@@ -132,8 +126,8 @@ class Auth:
         try:
             user = self._db.find_user_by(email=email)
             b_pwd = bytes(password, 'utf-8')
-            if bcrypt.checkpw(b_pwd, user.hashed_password):
-                return True
+            if bcrypt.checkpw(b_pwd, bytes(user.password, 'utf-8')):
+                return user
         except NoResultFound:
             pass
         return False
@@ -152,21 +146,17 @@ class Auth:
             pass
         return {}
 
-    def get_orgs(self, user_id=None, org_id=None):
+    def get_orgs(self, user=None, org_id=None):
         """
         """
+        orgs_list = []
         try:
-            # Use token to find user/user id
-            if user_id:
-                user = self.get_user(user_id)
-                if not user:
-                    return {} if org_id else []
-
+            if user:
                 orgs_list = list(map(lambda org: org.to_dict(),
                                      user.user_organisations))
 
                 if org_id:
-                    org = list(filter(lambda org: org.orgId==org_id,
+                    org = list(filter(lambda org: org['orgId']==org_id,
                                       orgs_list)) or {}
                     return org
                 else:
@@ -179,63 +169,44 @@ class Auth:
             pass
         return {}
 
-    def user_from_token(jwtoken):
-        if jwtoken is None:
-            return None
-        return self._db.find_user_by(email="bob@hbtn.io")
 
-
-
-    def authorize_user(token):
-        auth_user = self.user_from_token(token)
-
-        if auth is None:
-            abort(401)
-        else:
-            return auth_user
-
-    def authorize_for_user(auth_user, user_id):
+    def authorize_for_user(self, auth_user, user_id):
         retrieved_user_present = False
+        org_usr = []
+
         retrieved_user = self.get_user(user_id)
-        if not retrieved_user:
-            return {}
-        if retrieved_user.userId == auth_user.userId:
+        if user_id == auth_user.userId:
             return auth_user
 
         auth_orgs_list = auth_user.user_organisations
-        for org in auth_orgs_list:
-            if retrieved_user in org.organisation_users:
+        for orgs in auth_orgs_list:
+            org_usr = list(filter(lambda x: x.userId == retrieved_user.userId,
+                                  orgs.organisation_users))
+            if org_usr:
                 retrieved_user_present = True
                 break
 
-            if retrieved_user_present:
-                return retrieved_user
-            else:
-                return jsonify({'message' : 'Unauthorized'}), 401
-
-
-    def get_authorized_user(token=None):
-        auth_user = self.user_from_token(token)
-
-        if auth_user is None:
-            abort(401)
+        if retrieved_user_present:
+            return retrieved_user
         else:
-            return auth_user
+            raise ValueError('Unauthorized')
 
 
-    def add_user_to_org(org, user):
+    def add_user_to_org(self, org, user):
         if org and user:
-            org.organisation_users.append(user)
-            self._db.commit()
-        return org
+            if user not in org.organisation_users:
+                org.organisation_users.append(user)
+                self._db.commit()
+            return org
+        return None
 
-    def make_token(userid_payload):
-        token = jwt.encode({
+    def make_token(self, userid_payload):
+        payload = {
             'userId': userid_payload,
-            'expiration': (datetime.now(timezone.utc) +
-                           timedelta(minutes=10)).isoformat()
-        }, app.config['FLASK_SECRET_KEY'])
+            'exp': int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp())
+        }
 
+        token = jwt.encode(payload, SECRET_KEY)
         return token
 
     def token_required(self, f):
@@ -251,20 +222,12 @@ class Auth:
                 return jsonify({'message' : 'Token is absent!'}), 401
 
             try:
-                # decoding the payload to fetch the stored details
-                d_token = jwt.decode(token, app.config['FLASK_SECRET_KEY'],
-                                     algorithms=["HS256"])
+                d_token = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                current_user = self.get_user(d_token['userId'])
+            except jwt.ExpiredSignatureError:
+                current_user = None
 
-                if datetime.fromisoformat(d_token['expiration']) >\
-                        datetime.now(timezone.utc):
-                    current_user = self.get_user(d_token['userId'])
-                else:
-                    current_user = None
-
-
-                if not current_user:
-                    raise ValueError
-            except:
+            if not current_user:
                 return jsonify({
                     'message' : 'Token is invalid !!'
                 }), 401

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """DB module
 """
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, column
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.orm.session import Session
-from sqlalchemy.exc import NoResultFound, InvalidRequestError
+from sqlalchemy.exc import NoResultFound, InvalidRequestError, IntegrityError
 
 from uuid import uuid4
 from models.user import Base, User
@@ -17,9 +17,6 @@ from os import getenv
 
 URL_PARAMS = (getenv('HNG_2_USER'), getenv('HNG_2_PASSWORD'),
               getenv('HNG_2_HOST'), getenv('HNG_2_PORT'), getenv('HNG_2_DB'))
-
-URL_PARAMS_TEST = (getenv('TEST_USER'), getenv('TEST_PASSWORD'),
-                   getenv('TEST_HOST'), getenv('TEST_PORT'), getenv('TEST_DB'))
 
 
 def _generate_uuid() -> str:
@@ -41,10 +38,11 @@ class DB:
         # self._engine = create_engine(
         #     "postgresql+psycopg://{}:{}@{}:{}/{}".format(*URL_PARAMS_TEST)
         # )
-        self._engine = create_engine("postgresql+psycopg://tony:ynoT123$@localhost/test_db")
+        self._engine =
+        create_engine("postgresql+psycopg://{}:{}@{}:{}/{}".format(*URL_PARAMS))
 
-        Base.metadata.drop_all(self._engine)
-        Base.metadata.create_all(self._engine)
+        # Base.metadata.drop_all(self._engine)
+        # Base.metadata.create_all(self._engine)
         self.__session = None
 
     @property
@@ -70,12 +68,15 @@ class DB:
 
         new_user = User(userId=u_id, email=email, password=password,
                         firstName=firstName, lastName=lastName, phone=phone)
-
         self._session.add(new_user)
+
         return new_user
 
     def commit(self):
         self._session.commit()
+
+    def rollback(self):
+        self._session.rollback()
 
     def add_org(self, org_name, desc) -> User:
         """
@@ -92,40 +93,21 @@ class DB:
 
     def find_user_by(self, **kwargs) -> User:
         """
-        This method takes in arbitrary keyword arguments and returns the first
-        row found in the users table as filtered by the method’s input
-        argument.
+        This method takes in keyword arguments and returns the first
+        row found in the users table.
         """
-        list_of_queries = []
-        for item in kwargs.items():
-            if item[0] not in self.ATTRIBS_USER:
-                raise InvalidRequestError
-            tmp_str = '{}=:{}'.format(item[0], item[0])
-            list_of_queries.append(tmp_str)
 
-        q_str = ' OR '.join(list_of_queries)
-        user = self._session.query(User).filter(
-            text(q_str)).params(**kwargs).first()
+        user = self._session.query(User).filter_by(**kwargs).first()
         if user is None:
             raise NoResultFound
         return user
 
     def find_org_by(self, **kwargs) -> Organisation:
         """
-        This method takes in arbitrary keyword arguments and returns the first
-        row found in the organisations table as filtered by the method’s input
-        argument.
+        This method takes in keyword arguments and returns the first
+        row found in the organisations table.
         """
-        list_of_queries = []
-        for item in kwargs.items():
-            if item[0] not in self.ATTRIBS_ORG:
-                raise InvalidRequestError
-            tmp_str = '{}=:{}'.format(item[0], item[0])
-            list_of_queries.append(tmp_str)
-
-        q_str = ' OR '.join(list_of_queries)
-        org = self._session.query(Organisation).filter(
-            text(q_str)).params(**kwargs).first()
+        org = self._session.query(Organisation).filter_by(**kwargs).first()
         if org is None:
             raise NoResultFound
         return org

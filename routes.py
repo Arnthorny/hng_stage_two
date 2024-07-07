@@ -67,15 +67,7 @@ def login() :
                 "user": user.to_dict()
             }
         }
-
-                # TODO
-        resp = make_response(jsonify(res_msg))
-
-        # cookie_name = 'session_id'
-        # cookie_val = AUTH.create_session(rj['email'])
-        # resp.set_cookie(cookie_name, cookie_val)
-
-        return resp
+        return jsonify(res_msg)
     else:
         err_msg = {
             "status": "Bad request",
@@ -88,18 +80,22 @@ def login() :
 #TODO JWT PROTECTED
 @api_routes.route('/users/<id>')
 @AUTH.token_required
-def get_user(auth_user, id) -> Response:
+def get_user(authenticated_user, id) -> Response:
     """
     User gets their own record or user record in organisations
     """
-    retr_user = AUTH.authorize_for_user(auth_user, id)
+    try:
+        retr_user = AUTH.authorize_for_user(authenticated_user, id)
 
-    res_msg = {
-        "status": "success",
-        "message": "<message>",
-        "data": retr_user and retr_user.to_dict()
-    }
-    return jsonify(res_msg)
+        res_msg = {
+            "status": "success",
+            "message": "User retrieved",
+            "data": retr_user and retr_user.to_dict()
+        }
+        return jsonify(res_msg)
+
+    except ValueError:
+        return jsonify({'message' : 'Forbidden'}), 403
 
 #TODO JWT PROTECTED
 @api_routes.route('/organisations')
@@ -109,14 +105,14 @@ def get_all_orgs(auth_user) -> Response:
     gets all your organisations the user belongs to or created.
     If a user is logged in properly, they can get all their organisations.
     """
-    all_orgs = AUTH.get_orgs(user_id=auth_user.userId)
+    all_orgs = AUTH.get_orgs(auth_user)
 
     if not all_orgs:
-        return jsonify({"message": "Invalid Request"}), 400
+        return jsonify({"message": "Forbidden"}), 403
 
     res_msg = {
         "status": "success",
-        "message": "<message>",
+        "message": "Organisations retrieved",
         "data": {
             "organisations": all_orgs
         }
@@ -133,14 +129,14 @@ def get_org(auth_user, orgId):
     """
     the logged in user gets a single organisation record [PROTECTED]
     """
-    org = AUTH.get_orgs(user_id=auth_user.userId, org_id=orgId)
+    org = AUTH.get_orgs(auth_user, org_id=orgId)
 
     if not org:
-        return jsonify({"message": "Invalid Request"}), 400
+        return jsonify({"message": "Forbidden"}), 403
 
     res_msg = {
         "status": "success",
-        "message": "<message>",
+        "message": "Single organisation retrieved",
         "data": org
     }
 
@@ -188,11 +184,10 @@ def add_org_user(orgId) -> Response:
         user = AUTH.get_user(rj.get('userId'))
         ret_value = AUTH.add_user_to_org(org, user)
 
-    if ret_value:
-        res_msg = {
-            "status": "success",
-            "message": "User added to organisation successfully",
-        }
-        return jsonify(res_msg), 200
-    else:
-        abort(400)
+        if ret_value:
+            res_msg = {
+                "status": "success",
+                "message": "User added to organisation successfully",
+            }
+            return jsonify(res_msg), 200
+    return jsonify({"message": "Invalid Request"}), 400
